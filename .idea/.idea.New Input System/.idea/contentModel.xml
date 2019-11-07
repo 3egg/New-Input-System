@@ -286,7 +286,6 @@
             <e p="SkillStateExit.cs" t="Include" />
             <e p="Tests" t="Include">
               <e p="Test1.cs" t="Include" />
-              <e p="Test2.cs" t="Include" />
               <e p="Tests.asmdef" t="Include" />
             </e>
           </e>

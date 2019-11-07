@@ -1,15 +1,54 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections;
+using System.Collections.Generic;
 using NUnit.Framework;
+using UnityEngine;
+using UnityEngine.TestTools;
 
-namespace UnityEngine
+namespace Tests
 {
     public class Test1
     {
+        // A Test behaves as an ordinary method
         [Test]
-        public void test1()
+        public void Test1SimplePasses()
         {
-            List<int> skillList = new List<int>();
-            Debug.Log(int.Parse(string.Join("", skillList)));
+            // Use the Assert class to test conditions
+            
+        }
+
+        // A UnityTest behaves like a coroutine in Play Mode. In Edit Mode you can use
+        // `yield return null;` to skip a frame.
+        [UnityTest]
+        public IEnumerator Test1WithEnumeratorPasses()
+        {
+            // Use the Assert class to test conditions.
+            // Use yield to skip a frame.
+            yield return null;
+        }
+        
+        
+        private string intSkillToStr(int skillCode)
+        {
+            string returnStr = "";
+            foreach (var c in (skillCode + "").ToCharArray())
+            {
+                if (c == '1') returnStr += "X";
+                else returnStr += "O";
+            }
+
+            return returnStr;
+        }
+
+        private int strSkillToInt(string skillCode)
+        {
+            string returnStr = "";
+            foreach (var c in skillCode.ToCharArray())
+            {
+                if (c == 'X') returnStr += "1";
+                else returnStr += "2";
+            }
+
+            return int.Parse(returnStr);
         }
     }
 }

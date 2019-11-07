@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -25,15 +26,22 @@ namespace Scenes.scripts
         private Timer runTimer;
         private Timer skillTimer;
         private bool isAttacking;
+        private Transform comboEffect;
+        private List<Transform> combos;
+        private const string Combo = "combo";
+        private const string Trail = "trail";
 
         private void Awake()
         {
+            comboEffect = GetComponentsInChildren<Transform>().First(t => t.name.Equals(Combo));
+            combos = new List<Transform>(comboEffect.GetComponentsInChildren<Transform>(true)
+                .Where(t => t.name.Contains(Trail)).ToList());
             player = GetComponent<Rigidbody>();
             animator = GetComponent<Animator>();
             inputActions = new PlayerInputActions();
             inputActions.Player.Move.performed += ctx => moment = ctx.ReadValue<Vector2>();
-            inputActions.Player.LeftButtonDown.performed += ctx => pressKey(1);
-            inputActions.Player.RightButtonDown.performed += ctx => pressKey(2);
+            inputActions.Player.LeftButtonDown.performed += ctx => pressKey(1); //x
+            inputActions.Player.RightButtonDown.performed += ctx => pressKey(2); //o
         }
 
         private void FixedUpdate()
@@ -72,8 +80,13 @@ namespace Scenes.scripts
                     //todo skillCode 太长了就去截取
                     //todo skillCode不在出招表里面,播放基本动作
                     playAnimator(Skill, skillCode);
+                    playEffect(skillCode);
                 }
             }
+        }
+
+        private void playEffect(int skillCode)
+        {
         }
 
         private void movePlayer()
@@ -136,6 +149,32 @@ namespace Scenes.scripts
         private void OnDisable()
         {
             inputActions.Disable();
+        }
+        
+        
+
+        private string intSkillToStr(int skillCode)
+        {
+            string returnStr = "";
+            foreach (var c in (skillCode + "").ToCharArray())
+            {
+                if (c == '1') returnStr += "X";
+                else returnStr += "O";
+            }
+
+            return returnStr;
+        }
+
+        private int strSkillToInt(string skillCode)
+        {
+            string returnStr = "";
+            foreach (var c in skillCode.ToCharArray())
+            {
+                if (c == 'X') returnStr += "1";
+                else returnStr += "2";
+            }
+
+            return int.Parse(returnStr);
         }
     }
 }
