@@ -3,36 +3,31 @@ using System.Collections.Generic;
 using Scenes.scripts;
 using UnityEngine;
 
-public class SkillStateExit : StateMachineBehaviour
+public class IdleSwordState : StateMachineBehaviour
 {
-    private PlayerMovement playerMovement;
-    private static readonly int Skill = Animator.StringToHash("Skill");
     private static readonly int isIdleSword = Animator.StringToHash("IsIdleSword");
+    private PlayerMovement playerMovement;
+
 
     // OnStateEnter is called when a transition starts and the state machine starts to evaluate this state
     override public void OnStateEnter(Animator animator, AnimatorStateInfo stateInfo, int layerIndex)
     {
         playerMovement = FindObjectOfType<PlayerMovement>();
-        animator.SetBool(isIdleSword, true);
+        Timer.Register(1f, () => animator.SetBool(isIdleSword, false));
     }
 
     // OnStateUpdate is called on each Update frame between OnStateEnter and OnStateExit callbacks
     override public void OnStateUpdate(Animator animator, AnimatorStateInfo stateInfo, int layerIndex)
     {
-        playerMovement.isAttacking = true;
-        playerMovement.currentSkillCode = animator.GetInteger(Skill);
-        playerMovement.moment = Vector2.zero;
+        if (playerMovement.moment.x > 0 || playerMovement.moment.y > 0)
+        {
+        }
     }
 
     // OnStateExit is called when a transition ends and the state machine finishes evaluating this state
     override public void OnStateExit(Animator animator, AnimatorStateInfo stateInfo, int layerIndex)
     {
-        animator.SetInteger(Skill, 0);
-        playerMovement.isAttacking = false;
-        /*var skillCode = animator.GetInteger(Skill);
-        var skillName = /*"trail_" + #1#playerMovement.intSkillToStr(skillCode);
-        playerMovement.showOrHideSkillEffect(playerMovement.comboDic[skillName], 0,0);*/
-        //Timer.Register(0.01f, () => {  });
+        //playerMovement.moment = Vector2.zero;
     }
 
     // OnStateMove is called right after Animator.OnAnimatorMove()

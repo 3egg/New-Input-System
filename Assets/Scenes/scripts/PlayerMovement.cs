@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using DG.Tweening;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -11,13 +12,14 @@ namespace Scenes.scripts
     public class PlayerMovement : MonoBehaviour
     {
         private Rigidbody player;
-        private PlayerInputActions inputActions;
+        public PlayerInputActions inputActions;
 
-        private Vector2 moment;
+        public Vector2 moment;
 
-        private bool idleSword;
+        public bool idleSword;
         private bool isPress;
         public bool isAttacking { get; set; }
+        public bool isIdleSword;
         public int currentSkillCode { get; set; }
         private float moveSpeed = 5f;
         private float rotateSpeed = 30f;
@@ -35,8 +37,14 @@ namespace Scenes.scripts
         private const string Combo = "combo";
         private const string Trail = "trail";
         public Dictionary<string, Transform> comboDic;
+        public Dictionary<string, float> animatorClipTimeDic;
 
         private Queue<int> skillQueue;
+        private Sequence dotweenSequence;
+        private Camera mainCamera;
+
+        public int testInt = 123;
+        public string testStr = 123 + "";
 
         //这个是shader里面colorName
         private static readonly int TintColor = Shader.PropertyToID("_TintColor");
@@ -44,7 +52,7 @@ namespace Scenes.scripts
 
         private void Awake()
         {
-            initComobs();
+            mainCamera = Camera.main;
             player = GetComponent<Rigidbody>();
             animator = GetComponent<Animator>();
             inputActions = new PlayerInputActions();
@@ -52,6 +60,19 @@ namespace Scenes.scripts
             inputActions.Player.Move.performed += ctx => moment = ctx.ReadValue<Vector2>();
             inputActions.Player.LeftButtonDown.performed += ctx => pressKey(1); //x
             inputActions.Player.RightButtonDown.performed += ctx => pressKey(2); //o
+            initComobs();
+            initAnimatorClipTime();
+        }
+
+        private void initAnimatorClipTime()
+        {
+            var clips = animator.runtimeAnimatorController.animationClips.Where(t => t.name.Contains("attack"))
+                .ToArray();
+            animatorClipTimeDic = new Dictionary<string, float>(clips.Length);
+            foreach (var clip in clips)
+            {
+                animatorClipTimeDic[clip.name.Replace("attack", "")] = clip.length;
+            }
         }
 
         private void FixedUpdate()
@@ -76,7 +97,7 @@ namespace Scenes.scripts
         private void pressKey(int skill)
         {
             //播放完技能之后进入idle_sword状态,没有attack之后一秒后进入默认idle状态,在状态机脚本里实现了
-            skillTimer = Timer.Register(0.3f, () =>
+            skillTimer = Timer.Register(.3f, () =>
             {
                 onComplete(true, skill);
                 skillList.Clear();
@@ -117,9 +138,21 @@ namespace Scenes.scripts
                         var index = skillQueue.Dequeue();
                         playAnimator(Skill, index);
                         StartCoroutine(playEffect(index));
-                        //showOrHideSkillEffect(comboDic[intSkillToStr(index)], 1, 0.1f);
+                        skillToMoveCamera(index);
+                        isAttacking = true;
+                        //currentSkillCode = index;
                     }
                 }
+            }
+        }
+
+        private async void skillToMoveCamera(int index)
+        {
+            var delay = animatorClipTimeDic[intSkillToStr(index)] / 2.0f;
+            await Task.Delay(TimeSpan.FromSeconds(delay));
+            if ((index + "").Length >= 3)
+            {
+                mainCamera.DOShakePosition(0.2f, 0.5f, 20);
             }
         }
 
@@ -129,7 +162,8 @@ namespace Scenes.scripts
             var skill = intSkillToStr(skillCode);
             var trans = comboDic[skill];
             showOrHideSkillEffect(trans, 1, 0);
-            effectTimer = Timer.Register(0.2f, () => showOrHideSkillEffect(trans, 0, 0.1f));
+            effectTimer = Timer.Register(animatorClipTimeDic[intSkillToStr(skillCode)] - 0.3f,
+                () => showOrHideSkillEffect(trans, 0, 0f));
         }
 
         private void hideAllSKillEffect(Transform trans)
@@ -143,7 +177,7 @@ namespace Scenes.scripts
             }
         }
 
-        public void showOrHideSkillEffect(Transform trans, int endVal, float delay)
+        private void showOrHideSkillEffect(Transform trans, int endVal, float delay)
         {
             var meshRenderers = trans.GetComponentsInChildren<MeshRenderer>();
             foreach (var meshRenderer in meshRenderers)
@@ -152,12 +186,24 @@ namespace Scenes.scripts
                 material.DOKill();
                 material.DOFade(endVal, TintColor, 0.1f).SetDelay(delay);
             }
+
+            var ani = transform.GetComponentInChildren<Animation>();
+            if (ani != null)
+            {
+                ani.Play();
+            }
         }
 
 
+        //通过movePosition移动对象
+        //通过quaternion旋转对象
         private void movePlayer()
         {
-            if (isAttacking) return;
+            if (isAttacking)
+            {
+                return;
+            }
+
             float h = moment.x;
             float v = moment.y;
             if (Mathf.Abs(h) > 0 || Mathf.Abs(v) > 0)
