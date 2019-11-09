@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using DG.Tweening;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -16,6 +17,8 @@ namespace Scenes.scripts
 
         private bool idleSword;
         private bool isPress;
+        public bool isAttacking { get; set; }
+        public int currentSkillCode { get; set; }
         private float moveSpeed = 5f;
         private float rotateSpeed = 30f;
         private Vector3 moveDirection;
@@ -27,12 +30,17 @@ namespace Scenes.scripts
         private Timer runTimer;
         private Timer skillTimer;
         private Timer effectTimer;
-        private bool isAttacking;
         private Transform comboEffect;
         private List<Transform> combos;
         private const string Combo = "combo";
         private const string Trail = "trail";
-        private Dictionary<string, Transform> comboDic;
+        public Dictionary<string, Transform> comboDic;
+
+        private Queue<int> skillQueue;
+
+        //这个是shader里面colorName
+        private static readonly int TintColor = Shader.PropertyToID("_TintColor");
+
 
         private void Awake()
         {
@@ -40,9 +48,16 @@ namespace Scenes.scripts
             player = GetComponent<Rigidbody>();
             animator = GetComponent<Animator>();
             inputActions = new PlayerInputActions();
+            skillQueue = new Queue<int>();
             inputActions.Player.Move.performed += ctx => moment = ctx.ReadValue<Vector2>();
             inputActions.Player.LeftButtonDown.performed += ctx => pressKey(1); //x
             inputActions.Player.RightButtonDown.performed += ctx => pressKey(2); //o
+        }
+
+        private void FixedUpdate()
+        {
+            movePlayer();
+            walkToRun(isPress);
         }
 
         private void initComobs()
@@ -54,24 +69,17 @@ namespace Scenes.scripts
             foreach (var combo in combos)
             {
                 comboDic[combo.name.Replace(Trail + "_", "")] = combo;
+                hideAllSKillEffect(combo);
             }
-        }
-
-        private void FixedUpdate()
-        {
-            movePlayer();
-            walkToRun(isPress);
         }
 
         private void pressKey(int skill)
         {
-            //todo 播放完技能之后进入idle_sword状态,没有attack之后一秒后进入默认idle状态
-            isAttacking = true;
+            //播放完技能之后进入idle_sword状态,没有attack之后一秒后进入默认idle状态,在状态机脚本里实现了
             skillTimer = Timer.Register(0.3f, () =>
             {
                 onComplete(true, skill);
                 skillList.Clear();
-                isAttacking = false;
             });
 
             onComplete(false, skill);
@@ -79,7 +87,7 @@ namespace Scenes.scripts
 
         void onComplete(bool isTimer, int skill)
         {
-            //bug? 如果只按了一个键,0.5秒后才能触发
+            //bug? 如果只按了一个键,0.3秒后才能触发
             //如果是的话,做成dmc样的连续连招表
             if (!isTimer)
             {
@@ -90,7 +98,6 @@ namespace Scenes.scripts
                 var skillCode = skillList.Count > 0 ? int.Parse(string.Join("", skillList)) : 0;
                 if (skillCode != 0)
                 {
-                    //todo skillCode 太长了就去截取
                     var skillToStr = intSkillToStr(skillCode);
                     if (skillToStr.ToCharArray().Length > 5)
                     {
@@ -99,10 +106,19 @@ namespace Scenes.scripts
 
                     //todo skillCode不在出招表里面,播放基本动作,可以写一个while循环一直找连招表里面的动作
                     var code = !comboDic.ContainsKey(intSkillToStr(skillCode)) ? 1 : skillCode;
-                    //bug 通过队列,一次播放的动画只能有两个排队
-                    //animator.Play("attack" + intSkillToStr(code));
-                    playAnimator(Skill, code);
-                    StartCoroutine(playEffect(code));
+                    if (skillQueue.Count < 2)
+                    {
+                        skillQueue.Enqueue(code);
+                    }
+
+                    if (!isAttacking)
+                    {
+                        if (skillQueue.Count <= 0) return;
+                        var index = skillQueue.Dequeue();
+                        playAnimator(Skill, index);
+                        StartCoroutine(playEffect(index));
+                        //showOrHideSkillEffect(comboDic[intSkillToStr(index)], 1, 0.1f);
+                    }
                 }
             }
         }
@@ -111,9 +127,33 @@ namespace Scenes.scripts
         {
             yield return new WaitForSeconds(0.1f);
             var skill = intSkillToStr(skillCode);
-            comboDic[skill].gameObject.SetActive(true);
-            effectTimer = Timer.Register(0.4f, () => comboDic[skill].gameObject.SetActive(false));
+            var trans = comboDic[skill];
+            showOrHideSkillEffect(trans, 1, 0);
+            effectTimer = Timer.Register(0.2f, () => showOrHideSkillEffect(trans, 0, 0.1f));
         }
+
+        private void hideAllSKillEffect(Transform trans)
+        {
+            var meshRenderers = trans.GetComponentsInChildren<MeshRenderer>();
+            foreach (var meshRenderer in meshRenderers)
+            {
+                var color = meshRenderer.material.GetColor(TintColor);
+                color.a = 0;
+                meshRenderer.material.SetColor(TintColor, color);
+            }
+        }
+
+        public void showOrHideSkillEffect(Transform trans, int endVal, float delay)
+        {
+            var meshRenderers = trans.GetComponentsInChildren<MeshRenderer>();
+            foreach (var meshRenderer in meshRenderers)
+            {
+                var material = meshRenderer.material;
+                material.DOKill();
+                material.DOFade(endVal, TintColor, 0.1f).SetDelay(delay);
+            }
+        }
+
 
         private void movePlayer()
         {
@@ -124,7 +164,7 @@ namespace Scenes.scripts
             {
                 moveDirection = new Vector3(h, 0.0f, v);
                 player.MovePosition(player.position + moveSpeed * Time.deltaTime * moveDirection);
-                Quaternion newRotation = Quaternion.LookRotation(moveDirection, Vector3.up); //创建旋转
+                Quaternion newRotation = Quaternion.LookRotation(moveDirection, Vector3.up);
                 transform.rotation = Quaternion.Lerp(transform.rotation, newRotation, rotateSpeed * Time.deltaTime);
                 playAnimator(PlayerParaName, 2);
                 isPress = true;
@@ -178,7 +218,7 @@ namespace Scenes.scripts
         }
 
 
-        private string intSkillToStr(int skillCode)
+        public string intSkillToStr(int skillCode)
         {
             string returnStr = "";
             foreach (var c in (skillCode + "").ToCharArray())
@@ -190,7 +230,7 @@ namespace Scenes.scripts
             return returnStr;
         }
 
-        private int strSkillToInt(string skillCode)
+        public int strSkillToInt(string skillCode)
         {
             string returnStr = "";
             foreach (var c in skillCode.ToCharArray())
