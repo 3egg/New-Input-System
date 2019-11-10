@@ -44,9 +44,8 @@ namespace Scenes.scripts
         private Sequence dotweenSequence;
         private Camera mainCamera;
 
-        public int testInt = 123;
-        public string testStr = 123 + "";
-
+        private bool locking = false;
+    
         //这个是shader里面colorName
         private static readonly int TintColor = Shader.PropertyToID("_TintColor");
 
@@ -105,11 +104,16 @@ namespace Scenes.scripts
             //计时器出现是如果0.1秒内按下了第二个键
             if (latestTime > 0 && Time.time - latestTime < 1f)
             {
-                //Debug.Log("按下第二个键的时间-第一个键的时间小于1: " + Time.time);
-                //如果上一个动作还没有播放完,就把skillCode放进队列中,等到上一个技能播放完毕后,再去播放队列里的第一个,队列大小为2
+                //如果上一个动作还没有播放完,就把skillCode放进队列中,等到上一个技能播放完毕后,再去播放队列里的第一个
                 latestTime = Time.time;
                 skillList.Add(skill);
-                var index = int.Parse(string.Join("", skillList));
+                var str = string.Join("", skillList);
+                if (str.Length > 6)
+                {
+                    str = str.Substring(0, 4);
+                }
+
+                var index = int.Parse(str);
                 if (!comboDic.ContainsKey(intSkillToStr(index))) return;
                 //等到上一个动画播放完毕之后,播放index动画
                 StartCoroutine(playerSkillWhenNoAttacking(index));
@@ -127,18 +131,28 @@ namespace Scenes.scripts
 
         IEnumerator playerSkillWhenNoAttacking(int skill)
         {
-            while (true)
+            //第三个技能进来的时候得判断第二个技能执行完毕没有,如果第二个技能没有执行完毕就等待第二个技能执行完毕
+           while (true)
             {
-                yield return new WaitForSeconds(0.01f);
-                if (!isAttacking)
-                {
-                    playAnimator(Skill, skill);
-                    StartCoroutine(playEffect(skill));
-                    break;
-                }
+                yield return new WaitUntil(waitUtilLatestDone);
+                playAnimator(Skill, skill);
+                StartCoroutine(playEffect(skill));
+                //Debug.Log(animator.GetInteger(Skill));
+                break;
             }
         }
 
+        private bool waitUtilLatestDone()
+        {
+            //Debug.Log(animator.GetInteger(Skill));
+            return animator.GetInteger(Skill) == 0 && !isAttacking;
+        }
+
+        private bool waitUtilLockingIsFalse()
+        {
+            return !locking;
+        }
+        
         /*private void pressKey(int skill)
         {
             //播放完技能之后进入idle_sword状态,没有attack之后一秒后进入默认idle状态,在状态机脚本里实现了
@@ -207,8 +221,13 @@ namespace Scenes.scripts
             var skill = intSkillToStr(skillCode);
             var trans = comboDic[skill];
             showOrHideSkillEffect(trans, 1, 0);
+            if (!animatorClipTimeDic.ContainsKey(intSkillToStr(skillCode)))
+            {
+                yield break;
+            }
+
             effectTimer = Timer.Register(animatorClipTimeDic[intSkillToStr(skillCode)] - 0.3f,
-                () => showOrHideSkillEffect(trans, 0, 0f));
+                () => showOrHideSkillEffect(trans, 0, 0.1f));
         }
 
         private void hideAllSKillEffect(Transform trans)
