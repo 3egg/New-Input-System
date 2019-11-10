@@ -295,6 +295,7 @@
         </e>
         <e p="Scenes" t="Include">
           <e p="Scripts" t="Include">
+            <e p="IdleSwordState.cs" t="Include" />
             <e p="PlayerInputActions.cs" t="Include" />
             <e p="PlayerMovement.cs" t="Include" />
             <e p="SkillStateExit.cs" t="Include" />

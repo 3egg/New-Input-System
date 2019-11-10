@@ -16,7 +16,7 @@ samurai 2 animations player_run_evade_attack.max
 
 87-90 attack right return
 
-95-125 idle stoj s meèem
+95-125 idle stoj s meé‘•m
 
 130 bare hands stand static
 
@@ -24,11 +24,11 @@ samurai 2 animations player_run_evade_attack.max
 
 160-175 evade front
 
-180-209 walk cycle bez meèe
+180-209 walk cycle bez meé‘•
 
-215-248 walk cycle s meèem
+215-248 walk cycle s meé‘•m
 
-260-290 idle stoj bez meèe
+260-290 idle stoj bez meé‘•
 
 300-320 taseni mec objevit ve framu 310
 
@@ -46,7 +46,7 @@ samurai 2 animations player_run_evade_attack.max
 
 640-664 death zepredu
 
-680-730 dobití omraceneho enemy
+680-730 dobit?omraceneho enemy
 
 750-768 vytahne mec (horni polovina tela)
 

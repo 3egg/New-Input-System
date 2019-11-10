@@ -28,7 +28,6 @@ namespace Scenes.scripts
         private const string PlayerParaName = "AniIndex";
         private const string Skill = "Skill";
         private const string IsIdleSword = "IsIdleSword";
-        private readonly List<int> skillList = new List<int>();
         private Timer runTimer;
         private Timer skillTimer;
         private Timer effectTimer;
@@ -39,6 +38,8 @@ namespace Scenes.scripts
         public Dictionary<string, Transform> comboDic;
         public Dictionary<string, float> animatorClipTimeDic;
 
+        private readonly List<int> skillList = new List<int>();
+        private float latestTime;
         private Queue<int> skillQueue;
         private Sequence dotweenSequence;
         private Camera mainCamera;
@@ -96,6 +97,50 @@ namespace Scenes.scripts
 
         private void pressKey(int skill)
         {
+            //需求:
+            //1,按下第一个攻击键直接攻击,按下第二个攻击键后,判断是否在按下上一个攻击键的0.1秒内
+            //2.如果在0.1秒内就把第一个攻击键+第二个攻击键组合,播放组合的动画,组合动画必须得要在上一个动画播放完之后才能播放
+            //3.播放玩连招动作后要回到idleSword状态
+
+            //计时器出现是如果0.1秒内按下了第二个键
+            if (latestTime > 0 && Time.time - latestTime < 1f)
+            {
+                //Debug.Log("按下第二个键的时间-第一个键的时间小于1: " + Time.time);
+                //如果上一个动作还没有播放完,就把skillCode放进队列中,等到上一个技能播放完毕后,再去播放队列里的第一个,队列大小为2
+                latestTime = Time.time;
+                skillList.Add(skill);
+                var index = int.Parse(string.Join("", skillList));
+                if (!comboDic.ContainsKey(intSkillToStr(index))) return;
+                //等到上一个动画播放完毕之后,播放index动画
+                StartCoroutine(playerSkillWhenNoAttacking(index));
+            }
+            else
+            {
+                skillList.Clear();
+                latestTime = Time.time;
+                //Debug.Log("按下第一个键的时间: " + latestTime);
+                playAnimator(Skill, skill);
+                StartCoroutine(playEffect(skill));
+                skillList.Add(skill);
+            }
+        }
+
+        IEnumerator playerSkillWhenNoAttacking(int skill)
+        {
+            while (true)
+            {
+                yield return new WaitForSeconds(0.01f);
+                if (!isAttacking)
+                {
+                    playAnimator(Skill, skill);
+                    StartCoroutine(playEffect(skill));
+                    break;
+                }
+            }
+        }
+
+        /*private void pressKey(int skill)
+        {
             //播放完技能之后进入idle_sword状态,没有attack之后一秒后进入默认idle状态,在状态机脚本里实现了
             skillTimer = Timer.Register(.3f, () =>
             {
@@ -144,7 +189,7 @@ namespace Scenes.scripts
                     }
                 }
             }
-        }
+        }*/
 
         private async void skillToMoveCamera(int index)
         {
