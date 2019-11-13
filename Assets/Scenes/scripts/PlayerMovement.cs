@@ -12,14 +12,15 @@ namespace Scenes.scripts
     public class PlayerMovement : MonoBehaviour
     {
         private Rigidbody player;
+        private AudioSource audioSource;
         public PlayerInputActions inputActions;
-
+        private LoadAudioManager loadAudioManager;
+        private Dictionary<string, AudioClip> playerClips;
         public Vector2 moment;
 
         public bool idleSword;
         private bool isPress;
         public bool isAttacking { get; set; }
-        public bool isIdleSword;
         public int currentSkillCode { get; set; }
         private float moveSpeed = 5f;
         private float rotateSpeed = 30f;
@@ -40,12 +41,12 @@ namespace Scenes.scripts
 
         private readonly List<int> skillList = new List<int>();
         private float latestTime;
-        private Queue<int> skillQueue;
-        private Sequence dotweenSequence;
+        public Queue<int> skillQueue;
+        private int skillTimes;
         private Camera mainCamera;
+        private int runTime;
 
-        private bool locking = false;
-    
+
         //这个是shader里面colorName
         private static readonly int TintColor = Shader.PropertyToID("_TintColor");
 
@@ -55,6 +56,7 @@ namespace Scenes.scripts
             mainCamera = Camera.main;
             player = GetComponent<Rigidbody>();
             animator = GetComponent<Animator>();
+            audioSource = GetComponent<AudioSource>();
             inputActions = new PlayerInputActions();
             skillQueue = new Queue<int>();
             inputActions.Player.Move.performed += ctx => moment = ctx.ReadValue<Vector2>();
@@ -62,6 +64,12 @@ namespace Scenes.scripts
             inputActions.Player.RightButtonDown.performed += ctx => pressKey(2); //o
             initComobs();
             initAnimatorClipTime();
+        }
+
+        private void Start()
+        {
+            loadAudioManager = FindObjectOfType<LoadAudioManager>();
+            playerClips = loadAudioManager.playerClips;
         }
 
         private void initAnimatorClipTime()
@@ -100,9 +108,8 @@ namespace Scenes.scripts
             //1,按下第一个攻击键直接攻击,按下第二个攻击键后,判断是否在按下上一个攻击键的0.1秒内
             //2.如果在0.1秒内就把第一个攻击键+第二个攻击键组合,播放组合的动画,组合动画必须得要在上一个动画播放完之后才能播放
             //3.播放玩连招动作后要回到idleSword状态
-
             //计时器出现是如果0.1秒内按下了第二个键
-            if (latestTime > 0 && Time.time - latestTime < 1f)
+            if (Time.time - latestTime < 0.3f)
             {
                 //如果上一个动作还没有播放完,就把skillCode放进队列中,等到上一个技能播放完毕后,再去播放队列里的第一个
                 latestTime = Time.time;
@@ -122,9 +129,8 @@ namespace Scenes.scripts
             {
                 skillList.Clear();
                 latestTime = Time.time;
-                //Debug.Log("按下第一个键的时间: " + latestTime);
-                playAnimator(Skill, skill);
-                StartCoroutine(playEffect(skill));
+                //skillQueue.Enqueue(skill);
+                StartCoroutine(playerSkillWhenNoAttacking(skill));
                 skillList.Add(skill);
             }
         }
@@ -132,78 +138,36 @@ namespace Scenes.scripts
         IEnumerator playerSkillWhenNoAttacking(int skill)
         {
             //第三个技能进来的时候得判断第二个技能执行完毕没有,如果第二个技能没有执行完毕就等待第二个技能执行完毕
-           while (true)
+            var skillCode = (skill + "");
+            if (skillCode.Length > 1)
             {
-                yield return new WaitUntil(waitUtilLatestDone);
+                if (skillTimes > 5)
+                {
+                    yield break;
+                }
+                skillTimes++;
+                skillCode = skillCode.Substring(0, skillCode.Length - 1);
+                yield return new WaitUntil(() => skillCode.Equals(currentSkillCode + ""));
                 playAnimator(Skill, skill);
                 StartCoroutine(playEffect(skill));
-                //Debug.Log(animator.GetInteger(Skill));
-                break;
+                skillToMoveCamera(skill);
             }
+            else
+            {
+                Debug.Log(skill);
+                skillTimes = 0;
+                playAnimator(Skill, skill);
+                StartCoroutine(playEffect(skill));
+            }
+
+            //todo 排队播放的技能只能有5个,多的播不了
         }
 
         private bool waitUtilLatestDone()
         {
-            //Debug.Log(animator.GetInteger(Skill));
-            return animator.GetInteger(Skill) == 0 && !isAttacking;
+            //return animator.GetInteger(Skill) == 0 && !isAttacking;
+            return !isAttacking;
         }
-
-        private bool waitUtilLockingIsFalse()
-        {
-            return !locking;
-        }
-        
-        /*private void pressKey(int skill)
-        {
-            //播放完技能之后进入idle_sword状态,没有attack之后一秒后进入默认idle状态,在状态机脚本里实现了
-            skillTimer = Timer.Register(.3f, () =>
-            {
-                onComplete(true, skill);
-                skillList.Clear();
-            });
-
-            onComplete(false, skill);
-        }
-
-        void onComplete(bool isTimer, int skill)
-        {
-            //bug? 如果只按了一个键,0.3秒后才能触发
-            //如果是的话,做成dmc样的连续连招表
-            if (!isTimer)
-            {
-                skillList.Add(skill);
-            }
-            else
-            {
-                var skillCode = skillList.Count > 0 ? int.Parse(string.Join("", skillList)) : 0;
-                if (skillCode != 0)
-                {
-                    var skillToStr = intSkillToStr(skillCode);
-                    if (skillToStr.ToCharArray().Length > 5)
-                    {
-                        skillCode = strSkillToInt(skillToStr.Substring(0, 4));
-                    }
-
-                    //todo skillCode不在出招表里面,播放基本动作,可以写一个while循环一直找连招表里面的动作
-                    var code = !comboDic.ContainsKey(intSkillToStr(skillCode)) ? 1 : skillCode;
-                    if (skillQueue.Count < 2)
-                    {
-                        skillQueue.Enqueue(code);
-                    }
-
-                    if (!isAttacking)
-                    {
-                        if (skillQueue.Count <= 0) return;
-                        var index = skillQueue.Dequeue();
-                        playAnimator(Skill, index);
-                        StartCoroutine(playEffect(index));
-                        skillToMoveCamera(index);
-                        isAttacking = true;
-                        //currentSkillCode = index;
-                    }
-                }
-            }
-        }*/
 
         private async void skillToMoveCamera(int index)
         {
@@ -228,6 +192,7 @@ namespace Scenes.scripts
 
             effectTimer = Timer.Register(animatorClipTimeDic[intSkillToStr(skillCode)] - 0.3f,
                 () => showOrHideSkillEffect(trans, 0, 0.1f));
+            playOneShot(AudioName.attack, 0.5f);
         }
 
         private void hideAllSKillEffect(Transform trans)
@@ -278,6 +243,17 @@ namespace Scenes.scripts
                 transform.rotation = Quaternion.Lerp(transform.rotation, newRotation, rotateSpeed * Time.deltaTime);
                 playAnimator(PlayerParaName, 2);
                 isPress = true;
+                if (runTime == 0)
+                {
+                    playOneShot(AudioName.step);
+                }
+
+                runTime++;
+                //根据帧数,来判断是否run还是walk
+                if (runTime >= getFrames())
+                {
+                    runTime = 0;
+                }
             }
             else
             {
@@ -309,6 +285,33 @@ namespace Scenes.scripts
         private void setAnimatorBool(string aniName, bool isActive)
         {
             animator.SetBool(aniName, isActive);
+        }
+
+        private async void playOneShot(AudioName clipName, float volume = 1f)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(.25f));
+            audioSource.PlayOneShot(getAudioClip(clipName), volume);
+        }
+
+        private int getFrames()
+        {
+            if (moveSpeed == 8)
+            {
+                return 15;
+            }
+
+            return 20;
+        }
+
+        private AudioClip getAudioClip(AudioName clipName)
+        {
+            if (playerClips.ContainsKey(clipName.ToString()))
+            {
+                return playerClips[clipName.ToString()];
+            }
+
+            Debug.LogError("can not find " + clipName + "clip");
+            return null;
         }
 
         private void playAnimator(string aniName, int index)
@@ -352,4 +355,12 @@ namespace Scenes.scripts
             return int.Parse(returnStr);
         }
     }
+}
+
+public enum AudioName
+{
+    attack,
+    injory,
+    kotoul,
+    step,
 }

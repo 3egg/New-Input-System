@@ -296,8 +296,11 @@
         <e p="Scenes" t="Include">
           <e p="Scripts" t="Include">
             <e p="IdleSwordState.cs" t="Include" />
+            <e p="LoadAudioManager.cs" t="Include" />
+            <e p="LoadManager.cs" t="Include" />
             <e p="PlayerInputActions.cs" t="Include" />
             <e p="PlayerMovement.cs" t="Include" />
+            <e p="SingletonBase.cs" t="Include" />
             <e p="SkillStateExit.cs" t="Include" />
             <e p="Tests" t="Include">
               <e p="Test1.cs" t="Include" />
